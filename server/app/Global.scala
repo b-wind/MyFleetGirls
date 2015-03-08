@@ -7,6 +7,7 @@ import play.api._
 import play.api.mvc._
 import play.api.libs.concurrent.Execution.Implicits._
 import play.libs.Akka
+import play.filters.gzip.GzipFilter
 import scalikejdbc._
 import util.{Cron, CronSchedule, CronScheduler}
 
@@ -18,7 +19,7 @@ import scala.concurrent.duration._
  * @author ponkotuy
  * Date: 14/05/12.
  */
-object Global extends WithFilters(Cors) with GlobalSettings{
+object Global extends WithFilters(Cors,new GzipFilter()) with GlobalSettings{
   import util.Cron._
 
   override def onStart(app: Application): Unit = {
