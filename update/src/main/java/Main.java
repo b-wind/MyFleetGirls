@@ -24,7 +24,9 @@ public class Main {
             for(String uStr : urls) {
                 URL url = new URL(uStr);
                 Path dst = Paths.get(url.getPath()).getFileName();
-                if(!Files.exists(dst)) {
+                if(Files.exists(dst)) {
+                    System.out.println(dst.getFileName() + "の更新をチェックします。");
+                }else{
                     System.out.println(dst.getFileName() + "は存在しません。ダウンロードします。");
                 }
                 URLConnection conn = Connection.withRedirect(url, getFileSize(dst));
