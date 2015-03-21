@@ -13,7 +13,11 @@ libraryDependencies ++= Seq(
   "org.json4s" %% "json4s-native" % "3.2.11",
   "org.apache.httpcomponents" % "httpclient" % "4.4",
   "org.apache.httpcomponents" % "httpmime" % "4.4",
-  "org.apache.logging.log4j" % "log4j-core" % "2.2"
+  "org.slf4j" % "slf4j-api" % "1.7.10",
+  "org.slf4j" % "jul-to-slf4j" % "1.7.10",
+  "org.apache.logging.log4j" % "log4j-core" % "2.2",
+  "org.apache.logging.log4j" % "log4j-1.2-api" % "2.2",
+  "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.2"
 )
 
 scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-language:implicitConversions")
