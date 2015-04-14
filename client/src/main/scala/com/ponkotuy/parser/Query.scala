@@ -1,6 +1,6 @@
 package com.ponkotuy.parser
 
-import java.io.ByteArrayInputStream
+import java.nio.charset.Charset
 import java.util.zip.GZIPInputStream
 
 import com.netaporter.uri.Uri
@@ -38,7 +38,7 @@ object Query {
       is.close();
       content
     }.getOrElse {
-      buf.toString(UTF8)
+      buf.toString(Charset.forName("UTF8"))
     }
   }
 }
