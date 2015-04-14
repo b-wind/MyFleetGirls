@@ -31,13 +31,13 @@ object Query {
   val UTF8 = "UTF-8"
 
   private def toString(buf: ChannelBuffer): String = {
-    val tmp = new Array[Byte](buf.capacity())
-    buf.getBytes(0, tmp)
     Try {
-      val is = new GZIPInputStream(new ByteArrayInputStream(tmp))
-      Source.fromInputStream(is).mkString
+      val is = new GZIPInputStream(new ChannelBufferInputStream(buf))
+      val content = Source.fromInputStream(is).mkString
+      is.close();
+      content
     }.getOrElse {
-      new String(tmp, UTF8)
+      buf.toString(UTF8)
     }
   }
 }
