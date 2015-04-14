@@ -6,6 +6,7 @@ import java.util.zip.GZIPInputStream
 import com.netaporter.uri.Uri
 import com.ponkotuy.tool.PostQueryParser
 import org.jboss.netty.buffer.ChannelBuffer
+import org.jboss.netty.buffer.ChannelBufferInputStream
 import org.jboss.netty.handler.codec.http.{HttpRequest, HttpResponse}
 import org.json4s._
 
