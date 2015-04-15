@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.Properties;
 import java.security.GeneralSecurityException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
 
 /**
@@ -18,33 +21,35 @@ import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
  * Date: 15/03/09.
  */
 public class Main {
+    private static Logger log = LoggerFactory.getLogger("com.ponkotuy.update");
+
     public static void main(String[] args) throws Exception {
         try {
             List<String> urls = getProperties("update.properties");
             for(String uStr : urls) {
                 URL url = new URL(uStr);
                 Path dst = Paths.get(url.getPath()).getFileName();
-                if(!Files.exists(dst)) {
-                    System.out.println(dst.getFileName() + "は存在しません。ダウンロードします。");
+                if(Files.exists(dst)) {
+                    log.info(dst.getFileName() + "の更新をチェックします。");
+                }else{
+                    log.info(dst.getFileName() + "は存在しません。ダウンロードします。");
                 }
                 URLConnection conn = Connection.withRedirect(url, getLastModified(dst));
                 if(conn == null) {
-                    System.out.println(dst.getFileName() + "に変更はありません");
+                    log.info(dst.getFileName() + "に変更はありません");
                 } else {
                     Connection.download(conn, dst);
-                    System.out.println(dst.getFileName() + "のダウンロードが完了しました");
+                    log.info(dst.getFileName() + "のダウンロードが完了しました");
                 }
             }
         } catch(MalformedURLException e) {
-            System.err.println("おやっ、URLの書式に異常です！ぽんこつさんが悪いです！");
+            log.error("おやっ、URLの書式に異常です！ぽんこつさんが悪いです！");
             System.exit(1);
         } catch(IOException e) {
-            System.err.println("おやっ、IOExceptionです！");
-            e.printStackTrace(System.err);
+            log.error("おやっ、IOExceptionです！",e);
             System.exit(1);
         } catch(GeneralSecurityException e) {
-            System.err.println("おやっ、SecurityException です！");
-            e.printStackTrace(System.err);
+            log.error("おやっ、SecurityException です！"e);
             System.exit(1);
         }
     }

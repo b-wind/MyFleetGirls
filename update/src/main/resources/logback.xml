@@ -1,0 +1,22 @@
+<configuration>
+    <property name="LoggingDir" value="logs/" />
+    <property name="ROOT_LEVEL" value="INFO" />
+    <timestamp key="byDate" datePattern="yyyyMMdd"/>
+
+    <appender name="INFO" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <Pattern>%msg%n</Pattern>
+        </layout>
+    </appender>
+
+    <appender name="ASYNC_INFO" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="INFO"/>
+    </appender>
+
+    <root level="${ROOT_LEVEL}">
+        <appender-ref ref="ASYNC_INFO"/>
+    </root>
+</configuration>
