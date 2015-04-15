@@ -20,6 +20,7 @@ libraryDependencies ++= Seq(
   "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.2"
 )
 
+javaOptions   ++= Seq("-source", "1.7", "-target", "1.7")
 scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-language:implicitConversions")
 
 assemblySettings
