@@ -49,7 +49,7 @@ public class Main {
             log.error("おやっ、IOExceptionです！",e);
             System.exit(1);
         } catch(GeneralSecurityException e) {
-            log.error("おやっ、SecurityException です！"e);
+            log.error("おやっ、SecurityException です！",e);
             System.exit(1);
         }
     }
