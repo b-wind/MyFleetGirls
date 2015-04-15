@@ -7,22 +7,24 @@ import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 
 public class MFGKeyStore {
-    private static final String TrustStoreFile = "myfleetgirls.keystore";
-    private static final String TrustStorePass = "myfleetgirls";
+    private static final String DefaultTrustStoreFile = "myfleetgirls.keystore";
+    private static final String DefaultTrustStorePass = "myfleetgirls";
 
     private SSLContext sslContext;
 
     public MFGKeyStore() throws IOException, GeneralSecurityException {
         KeyStore trustStore = KeyStore.getInstance("JKS");
+        String ts_file = System.getProperty("com.ponkotuy.http.trustStoreFile", DefaultTrustStoreFile);
+        String ts_pass = System.getProperty("com.ponkotuy.http.trustStorePass", DefaultTrustStorePass);
         try {
-            InputStream io = new FileInputStream(TrustStoreFile);
-            trustStore.load(io, TrustStorePass.toCharArray());
+            InputStream io = new FileInputStream(ts_file);
+            trustStore.load(io, ts_pass.toCharArray());
         } catch (FileNotFoundException e) {
             try {
                 ClassLoader cl = getClass().getClassLoader();
-                File file = new File(cl.getResource(TrustStoreFile).getFile());
+                File file = new File(cl.getResource(DefaultTrustStoreFile).getFile());
                 InputStream io = new FileInputStream(file);
-                trustStore.load(io, TrustStorePass.toCharArray());
+                trustStore.load(io, DefaultTrustStorePass.toCharArray());
             } catch (Throwable e2) {
                 e2.printStackTrace();
             }
