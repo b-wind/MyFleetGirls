@@ -40,19 +40,28 @@ import scala.collection.mutable
 object MFGHttp extends Log {
   val UTF8 = Charset.forName("UTF-8")
   val userAgent = s"${BuildInfo.name} client ver:${BuildInfo.version} w/JVM: ${util.Properties.javaVersion}"
+  val timeToLive = 5 * 60 * 1000 // 5 minutes
   val sslContext: SSLContext = new MFGKeyStore().getSslContext
   val config = RequestConfig.custom()
       .setConnectTimeout(60*1000)
       .setRedirectsEnabled(true)
-      .setStaleConnectionCheckEnabled(true)
       .build()
+  var sslSocketFactory = new SSLConnectionSocketFactory(sslContext)
+  val connMgr = new PoolingHttpClientConnectionManager(
+        RegistryBuilder.create[ConnectionSocketFactory]()
+        .register("http", PlainConnectionSocketFactory.getSocketFactory())
+        .register("https", sslSocketFactory)
+        .build(),
+        null,null,null,
+        timeToLive ,TimeUnit.MILLISECONDS
+      )
+  connMgr.setValidateAfterInactivity( timeToLive )
+  connMgr.setDefaultMaxPerRoute(1)
   val httpBuilder = HttpClientBuilder.create()
       .setUserAgent(userAgent)
       .setDefaultRequestConfig(config)
-      .setSSLSocketFactory(new SSLConnectionSocketFactory(sslContext))
       .setSslcontext(sslContext)
-      .setConnectionTimeToLive(5 * 60 , TimeUnit.SECONDS)
-      .setMaxConnPerRoute(1)
+      .setConnectionTimeToLive( timeToLive , TimeUnit.MILLISECONDS)
   ClientConfig.clientProxyHost.foreach(httpBuilder.setProxy)
   val http = httpBuilder.build()
 
