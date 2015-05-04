@@ -1,7 +1,7 @@
-@(area: Int, info: Int, cells: Seq[CellInfo])
+@(stage: Stage, cells: Seq[CellInfo])
 
 @main {
-  <title>@area-@info -艦娘ドロップ一覧-</title>
+  <title>@stage -艦娘ドロップ一覧-</title>
   <script src="@Js.Vue"></script>
   <script src="@Js.D3"></script>
   <script src="@Js.Lodash"></script>
@@ -13,7 +13,7 @@
 } {
   @statistics_head("drop") {
     <div class="page-header">
-      <h1>@area-@info 艦娘ドロップ<small><a href="@routes.ViewSta.drop(area, info)">ID版</a></small></h1>
+      <h1>@stage 艦娘ドロップ<small><a href="@routes.ViewSta.drop(stage.area, stage.info)">ID版</a></small></h1>
     </div>
 
     <div>
@@ -22,16 +22,16 @@
 
     <div class="panel-group" id="accordion">
       @cells.map { cell =>
-        <div class="panel panel-default" id="panel@cell.pointAlpha" data-cell="@cell.pointAlpha">
+        <div class="panel panel-default" id="panel@cell.rawPointAlpha" data-cell="@cell.rawPointAlpha">
           <div class="panel-heading">
             <h2 class="panel-title">
-              <a data-toggle="collapse" data-parent="#accordion" href="#collapse@cell.pointAlpha">
+              <a data-toggle="collapse" data-parent="#accordion" href="#collapse@cell.rawPointAlpha">
                 @cell.pointAlpha
                 <small>@if(cell.start){Start} @if(cell.boss){BOSS}</small>
               </a>
             </h2>
           </div>
-          <div id="collapse@cell.pointAlpha" class="panel-collapse collapse" data-url="@routes.Rest.dropCellAlpha(cell.areaId, cell.infoNo, cell.alphabet, "(rank)", "(from)", "(to)")">
+          <div id="collapse@cell.rawPointAlpha" class="panel-collapse collapse" data-url="@routes.Rest.dropCellAlpha(cell.areaId, cell.infoNo, cell.alphabet, "(rank)", "(from)", "(to)")">
             <form class="form-inline">
               <div class="panel-body">
                 <label class="checkbox-inline">
@@ -52,7 +52,7 @@
                 <input type="text" class="datepicker form-control" v-model="from" />
                 〜
                 <input type="text" class="datepicker form-control" v-model="to" />
-                <div style="width:900px;height:600px;margin:auto;" id="sunburst@cell.pointAlpha" class="sunburst"></div>
+                <div style="width:900px;height:600px;margin:auto;" id="sunburst@cell.rawPointAlpha" class="sunburst"></div>
               </div>
             </form>
             <table class="table table-condensed table-hover">
