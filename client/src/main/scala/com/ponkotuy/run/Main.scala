@@ -9,6 +9,7 @@ import com.ponkotuy.util.Log
 import com.ponkotuy.value.KCServer
 import io.netty.util.ResourceLeakDetector
 import uk.org.lidalia.sysoutslf4j.context.SysOutOverSLF4J
+import uk.org.lidalia.sysoutslf4j.context.LogLevel
 
 /**
  *
@@ -17,7 +18,7 @@ import uk.org.lidalia.sysoutslf4j.context.SysOutOverSLF4J
  */
 object Main extends App with Log {
   ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.ADVANCED)
-  SysOutOverSLF4J.sendSystemOutAndErrToSLF4J()
+  SysOutOverSLF4J.sendSystemOutAndErrToSLF4J(LogLevel.WARN,LogLevel.ERROR)
   try {
     message()
 
