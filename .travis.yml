@@ -18,8 +18,18 @@ before_cache:
 jdk:
   - oraclejdk8
 
+env:
+  - SBT_TASK=compile
+  - SBT_TASK=test
+  - SBT_TASK=library/compile
+  - SBT_TASK=server/compile
+  - SBT_TASK=client/compile
+  - SBT_TASK=library/test
+  - SBT_TASK=server/test
+  - SBT_TASK=client/test
+
 script:
-  - sbt ++$TRAVIS_SCALA_VERSION test
+  - sbt ++$TRAVIS_SCALA_VERSION $SBT_TASK
 
 notifications:
   webhooks:
