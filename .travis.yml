@@ -25,7 +25,7 @@ env:
   - SBT_TASK=server/compile
   - SBT_TASK=client/compile
   - SBT_TASK=library/test
-  - SBT_TASK=server/test
+  - SBT_TASK="--debug server/test"
   - SBT_TASK=client/test
 
 script:
