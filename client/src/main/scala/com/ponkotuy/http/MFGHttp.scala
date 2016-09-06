@@ -49,7 +49,7 @@ object MFGHttp extends Log {
       .setSSLContext(sslContext)
       .setConnectionTimeToLive(5 * 60 , TimeUnit.SECONDS)
       .setMaxConnPerRoute(1)
-      .setRoutePlanner(new SystemDefaultRoutePlanner(ProxySelector.getDefault()))
+  ClientConfig.clientProxyHost.foreach(httpBuilder.setProxy)
   val http = httpBuilder.build();
 
   implicit val formats = Serialization.formats(NoTypeHints)
