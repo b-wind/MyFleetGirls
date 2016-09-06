@@ -59,9 +59,15 @@ object MyFleetGirlsBuild extends Build {
     .settings(scalaVersion := scalaVer)
     .dependsOn(library)
     .enablePlugins(BuildInfoPlugin)
+    .settings(
+      logLevel in test := Level.Debug
+    )
 
   lazy val library = project
-    .settings(scalaVersion := scalaVer)
+    .settings(
+      logLevel in test := Level.Debug
+      scalaVersion := scalaVer
+     )
 
   lazy val update = project
     .settings(assemblyJarName in assembly := "update.jar")
