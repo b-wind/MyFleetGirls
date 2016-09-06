@@ -19,7 +19,7 @@ jdk:
   - oraclejdk8
 
 script:
-  - "sbt --debug ++$TRAVIS_SCALA_VERSION server/test"
+  - "sbt ++$TRAVIS_SCALA_VERSION server/test"
 
 notifications:
   webhooks:
