@@ -2,6 +2,7 @@
 name := "MyFleetGirlsServer"
 
 val scalikeJdbcVer = "2.4.1"
+set logLevel in test := Level.Debug.
 
 libraryDependencies ++= Seq(
   "org.scalikejdbc" %% "scalikejdbc" % scalikeJdbcVer,

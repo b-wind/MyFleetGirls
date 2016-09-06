@@ -49,6 +49,7 @@ object MyFleetGirlsBuild extends Build {
     .enablePlugins(sbt.PlayScala)
     .settings(
       scalaVersion := scalaVer,
+      logLevel in test := Level.Debug,
       downLib <<= downLibTask,
       unmanagedJars in Compile <<= (unmanagedJars in Compile).dependsOn(downLib)
     )
