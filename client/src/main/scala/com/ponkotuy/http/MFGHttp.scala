@@ -46,7 +46,7 @@ object MFGHttp extends Log {
       .setUserAgent(userAgent)
       .setDefaultRequestConfig(config)
       .setSSLSocketFactory(new SSLConnectionSocketFactory(sslContext))
-      .setSslcontext(sslContext)
+      .setSSLContext(sslContext)
       .setConnectionTimeToLive(5 * 60 , TimeUnit.SECONDS)
       .setMaxConnPerRoute(1)
       .setRoutePlanner(new SystemDefaultRoutePlanner(ProxySelector.getDefault()))
@@ -78,7 +78,6 @@ object MFGHttp extends Log {
       case m: MasterPostable => masterPost(m.url, m.data, m.ver)
       case n: NormalPostable => post(n.url, n.data, n.ver)
       case f: FilePostable =>
-        println(f.fileBodyKey, f.ext)
         TempFileTool.save(f.file, f.ext) { file =>
           postFile(f.url, f.fileBodyKey, f.ver)(file)
         }
@@ -105,7 +104,7 @@ object MFGHttp extends Log {
       }
       alertResult(res)
     } catch {
-      case e: Throwable => error(e.getStackTrace.mkString("\n")); 1
+      case e: Exception => error(e.getStackTrace.mkString("\n")); 1
     } finally {
       HttpClientUtils.closeQuietly(res)
     }
@@ -120,7 +119,7 @@ object MFGHttp extends Log {
       res = http.execute(post)
       alertResult(res)
     } catch {
-      case e: Throwable => error(e.getStackTrace.mkString("\n")); 1
+      case e: Exception => error(e.getStackTrace.mkString("\n")); 1
     } finally {
       HttpClientUtils.closeQuietly(res)
     }
@@ -148,7 +147,7 @@ object MFGHttp extends Log {
       res = http.execute(post)
       alertResult(res)
     } catch {
-      case e: Throwable => error((e.getMessage :+ e.getStackTrace).mkString("\n")); 600
+      case e: Exception => error((e.getMessage :+ e.getStackTrace).mkString("\n")); 600
     } finally {
       HttpClientUtils.closeQuietly(res)
     }
@@ -156,18 +155,21 @@ object MFGHttp extends Log {
 
   private def alertResult(res: CloseableHttpResponse): Int = {
     val stCode = res.getStatusLine.getStatusCode
-    val content = allRead(res.getEntity.getContent)
     if(stCode >= 400) {
+      val content = allRead(res.getEntity.getContent)
       error(s"Error Response ${stCode}\n${res.getStatusLine}\n${content}")
     }
     stCode
   }
 
-  def existsImage(key: String): Boolean =
-    head(s"/image/ship_obf/$key.jpg", ver = 1).getStatusLine.getStatusCode == 200
+  def existsImage(key: String, version: Int): Boolean =
+    head(s"/image/ship_obf/$key/$version.jpg", ver = 2).getStatusLine.getStatusCode == 200
 
   def existsSound(s: SoundUrlId): Boolean =
-    head(s"/sound/ship_obf/${s.shipKey}/${s.soundId}.mp3", ver = 1).getStatusLine.getStatusCode == 200
+    head(s"/sound/ship_obf/${s.shipKey}/${s.soundId}/${s.version}.mp3", ver = 2).getStatusLine.getStatusCode == 200
+
+  def existsMap(area: Int, info: Int, version: Int): Boolean =
+    head(s"/map/${area}/${info}${version}.jpg", ver = 2).getStatusLine.getStatusCode == 200
 
   private def head(uStr: String, ver: Int = 1) = {
     val head = new HttpHead(ClientConfig.getUrl(ver) + uStr)

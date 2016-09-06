@@ -3,21 +3,32 @@ package com.ponkotuy.run
 import com.ponkotuy.build.BuildInfo
 import com.ponkotuy.config.ClientConfig
 import com.ponkotuy.http.MFGHttp
-import com.ponkotuy.intercept.KCIntercepter
-import com.ponkotuy.proxy.FinagleProxy
+import com.ponkotuy.intercept.KCInterceptor
+import com.ponkotuy.proxy.{KCFiltersSource, LittleProxy}
+import com.ponkotuy.util.Log
+import com.ponkotuy.value.KCServer
+import io.netty.util.ResourceLeakDetector
 
 /**
  *
  * @author ponkotuy
  * Date: 14/02/18.
  */
-object Main extends App {
+object Main extends App with Log {
+  ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.ADVANCED)
   try {
     message()
-    new FinagleProxy(ClientConfig.proxyHost, ClientConfig.proxyPort, new KCIntercepter).start()
+
+    val proxy = new LittleProxy(
+      ClientConfig.proxyHost,
+      ClientConfig.proxyPort,
+      ClientConfig.upstreamProxyHost,
+      new KCFiltersSource(KCServer.ips, new KCInterceptor())
+    )
+    proxy.start()
   } catch {
     case e: ExceptionInInitializerError =>
-      e.printStackTrace()
+      logger.info("proxy初期化エラー", e)
       println("application.confが存在しないか設定が無効です。application.conf.sampleをコピーして設定しましょう")
   }
 

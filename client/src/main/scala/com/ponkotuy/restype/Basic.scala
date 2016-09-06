@@ -3,7 +3,7 @@ package com.ponkotuy.restype
 import com.netaporter.uri.Uri
 import com.ponkotuy.config.ClientConfig
 import com.ponkotuy.data
-import com.ponkotuy.data.{MyFleetAuth, Auth}
+import com.ponkotuy.data.{Auth, MyFleetAuth}
 import com.ponkotuy.http.MFGHttp
 import com.ponkotuy.parser.Query
 import com.ponkotuy.value.KCServer
@@ -19,8 +19,9 @@ import scala.util.matching.Regex
 case object Basic extends ResType {
   import ResType._
 
-  private[restype] var memberId: Option[Long] = None
-  private[this] var initSended = false
+  private[this] var memberId: Option[Long] = None
+  private[this] var nickname: Option[String] = None
+  private[this] var initSending = false
 
   override def regexp: Regex = s"\\A$GetMember/basic\\z".r
 
@@ -28,10 +29,15 @@ case object Basic extends ResType {
 
   def postablesFromObj(obj: JValue, uri: Uri): Seq[Result] = {
     val auth = data.Auth.fromJSON(obj)
+    if(memberId.exists(_ != auth.memberId)) {
+      System.err.println("異なる艦これアカウントによる通信を検知しました。一旦終了します")
+      System.exit(1) // 例外が伝搬するか自信が無かったので問答無用で殺す
+    }
     memberId = Some(auth.memberId)
+    nickname = Some(auth.nickname)
     val auth2 = ClientConfig.auth(auth.memberId)
 
-    if(!initSended) postAdmiralSettings(uri)(Some(auth), auth2)
+    if(!initSending) postAdmiralSettings(uri)(Some(auth), auth2)
 
     val basic = data.Basic.fromJSON(obj)
 
@@ -45,7 +51,10 @@ case object Basic extends ResType {
     } {
       MFGHttp.post("/admiral_settings", write(kcServer))(auth, auth2)
       println(s"所属： ${kcServer.name}")
-      initSended = true
+      initSending = true
     }
   }
+
+  def getMemberId: Option[Long] = memberId
+  def getNickname: Option[String] = nickname
 }

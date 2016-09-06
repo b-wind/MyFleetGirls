@@ -1,9 +1,9 @@
 package util
 
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext.Implicits.global
-import akka.actor.Actor
-import com.github.nscala_time.time.Imports._
+import akka.actor.{Actor, ActorRef, ActorSystem, InvalidActorNameException, Props}
+import play.api.Logger
+
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
  *
@@ -12,6 +12,8 @@ import com.github.nscala_time.time.Imports._
  */
 case class Cron(minutes: Int, hour: Int, day: Int, month: Int, dayOfWeek: Int) {
   import Cron._
+  import com.github.nscala_time.time.Imports._
+
   def in(x: Cron): Boolean = {
     (x.minutes == aster || minutes == x.minutes) &&
       (x.hour == aster || hour == x.hour) &&
@@ -19,9 +21,15 @@ case class Cron(minutes: Int, hour: Int, day: Int, month: Int, dayOfWeek: Int) {
       (x.month == aster || month == x.month) &&
       (x.dayOfWeek == aster || dayOfWeek == x.dayOfWeek)
   }
+
+  def isEndOfMonth(year: Int): Boolean = {
+    if(isAster(month) || isAster(day)) return false
+    (new DateTime(year, month, day, 0, 0, 0) + 1.day).getMonthOfYear != month
+  }
 }
 
 object Cron {
+  import com.github.nscala_time.time.Imports._
   val aster = -1
 
   def fromLong(millis: Long = System.currentTimeMillis()): Cron = {
@@ -40,6 +48,7 @@ object Cron {
   }
 
   def now: Cron = fromDateTime(DateTime.now)
+  def isAster(v: Int): Boolean = v < 0
 }
 
 case class CronSchedule(cron: Cron, f: Cron => Unit) {
@@ -48,11 +57,20 @@ case class CronSchedule(cron: Cron, f: Cron => Unit) {
   }
 }
 
+trait CronExecutor {
+  def exec(cron: Cron): Unit
+  def schedule(cron: Cron): CronSchedule = CronSchedule(cron, exec)
+  def schedule(minutes: Int, hour: Int, day: Int, month: Int, dayOfWeek: Int): CronSchedule =
+    schedule(Cron(minutes, hour, day, month, dayOfWeek))
+}
+
 /** 設定されたCronを実行するScheduler
   *
   * 重複実行は許容されるが、取り零しが発生する可能性があるので、1分より短かめの間隔で"minutes"を送信する必要がある
   */
 class CronScheduler extends Actor {
+  import context.dispatcher
+
   var schedules: List[CronSchedule] = Nil
   var lastExec: Long = 0 // Original Minutes (SystemTime / (60 * 1000))
 
@@ -68,6 +86,27 @@ class CronScheduler extends Actor {
         }
         lastExec = minutes
       }
-    case x => println("Not Received: " + x)
+    case x => Logger.warn("Not Received: " + x)
+  }
+}
+
+object CronScheduler {
+  import scala.concurrent.duration._
+
+  /**
+    * Create CronScheduler Actor
+    *
+    * {{{
+    * val system = ActorSystem()
+    * val cron = CronScheduler.create(system, "name")
+    * cron ! CronSchedule(Cron(0, 5, aster, aster, aster), func)
+    * }}}
+    *
+    * @throws InvalidActorNameException : if you use invalid actor name.
+    */
+  def create(system: ActorSystem, name: String)(implicit ec: ExecutionContext): ActorRef = {
+    val cron = system.actorOf(Props[CronScheduler], name)
+    system.scheduler.schedule(45.seconds, 45.seconds, cron, "minutes")
+    cron
   }
 }

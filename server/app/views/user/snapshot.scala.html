@@ -15,6 +15,12 @@
       window.open(url);
     }
   </script>
+  <style>
+    .fleetinfo {
+      float: right;
+      margin-bottom: -6px;
+    }
+  </style>
 } {
   @head_content(user) {
     @usertab(user, "snap") {
@@ -51,6 +57,10 @@
 
           <div class="panel-body">
             @snap.comments.map { it => @it <br> }
+            <p class="fleetinfo">
+              <small>制空値</small> @{snap.ships.map(_.airSuperiority).sum}
+              <small>索敵値</small> @{tool.Calc.spotter(snap.ships)}
+            </p>
           </div>
           <table class="table table-striped">
             <thead>
@@ -69,11 +79,14 @@
               @snap.ships.map { ship =>
                 <tr>
                   <td>@ship.stAbbName</td>
-                  <td class="nowrap"><a data-toggle="modal" href="@routes.UserView.snapAship(user.admiral.id, ship.id)" class="modal_link" data-target="#modal">@ship.name</a></td>
+                  <td class="nowrap">
+                    <a data-toggle="modal" href="@routes.UserView.snapAship(user.admiral.id, ship.id)" class="modal_link" data-target="#modal">@ship.name</a>
+                    @ship.antiAirCutinOpt.map { cutin => <span class="label label-default">対空@cutin</span> }
+                  </td>
                   <td style="@if(ship.expRate > 0){background-color:#D9EDF7;display:block;width:@{(ship.expRate*100).toInt}%}">@ship.lv</td>
                   <td style="padding:0px;"><div style="background-color:@ship.hpRGB.toString;width:@{(ship.hpRate*100).toInt}%;padding:5px;">@ship.nowhp/@ship.maxhp</div></td>
-                  @ship.slotMaster.map { slot => <td>@slot.name</td> }
-                  @{(0 until (4 - ship.slotMaster.size)).map { _ => <td></td> }}
+                  @ship.slotNames.map { slot => <td>@slot</td> }
+                  @{(0 until (4 - ship.slotNames.size)).map { _ => <td></td> }}
                 </tr>
               }
             </tbody>
@@ -91,24 +104,23 @@
       }
 
       @if(user.logined.isEmpty || user.isMine) {
-        <div class="row">
-          <div class="col-sm-3">
-            <button type="button" class="btn btn-default" @if(!user.isMine){disabled="disabled"} onclick="location.href = ' @routes.UserView.registerSnap(user.admiral.id, 1) ';return false">
-              第一艦隊を登録</button>
-          </div>
-          <div class="col-sm-3">
-            <button type="button" class="btn btn-default" @if(!user.isMine){disabled="disabled"} onclick="location.href = ' @routes.UserView.registerSnap(user.admiral.id, 2) ';return false">
-              第二艦隊を登録</button>
-          </div>
-          <div class="col-sm-3">
-            <button type="button" class="btn btn-default" @if(!user.isMine){disabled="disabled"} onclick="location.href = ' @routes.UserView.registerSnap(user.admiral.id, 3) ';return false">
-              第三艦隊を登録</button>
-          </div>
-          <div class="col-sm-3">
-            <button type="button" class="btn btn-default" @if(!user.isMine){disabled="disabled"} onclick="location.href = ' @routes.UserView.registerSnap(user.admiral.id, 4) ';return false">
-              第四艦隊を登録</button>
-          </div>
-        </div>
+        <form class="form-inline">
+          <button type="button" class="btn btn-default" @if(!user.isMine){disabled="disabled"} onclick="location.href = ' @routes.UserView.registerSnap(user.admiral.id, 1) ';return false">
+            第一艦隊を登録
+          </button>
+          <button type="button" class="btn btn-default" @if(!user.isMine){disabled="disabled"} onclick="location.href = ' @routes.UserView.registerSnap(user.admiral.id, 2) ';return false">
+            第二艦隊を登録
+          </button>
+          <button type="button" class="btn btn-default" @if(!user.isMine){disabled="disabled"} onclick="location.href = ' @routes.UserView.registerSnap(user.admiral.id, 3) ';return false">
+            第三艦隊を登録
+          </button>
+          <button type="button" class="btn btn-default" @if(!user.isMine){disabled="disabled"} onclick="location.href = ' @routes.UserView.registerSnap(user.admiral.id, 4) ';return false">
+            第四艦隊を登録
+          </button>
+          <button type="button" class="btn btn-default" @if(!user.isMine){disabled="disabled"} onclick="location.href = ' @routes.UserView.registerSnap(user.admiral.id, 12) ';return false">
+            連合艦隊を登録
+          </button>
+        </form>
       }
 
       <div class="modal fade bs-example-modal-lg" aria-hidden="true" role="dialog" aria-labelledby="modalLabel" id="modal">

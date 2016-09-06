@@ -1,25 +1,55 @@
 package controllers
 
+import javax.inject.Inject
+
 import honor.Honors
 import models.db
+import models.join.ShipWithName
 import models.other.ShipWithCondition
+import models.query.{ShipExpAggPattern, ShipExpGroup}
 import models.req.{AllCrawlAPI, SortType}
+import models.response.{Exp, ShipExps}
+import org.json4s.native.Serialization.write
 import org.json4s.JsonDSL._
 import org.json4s._
-import play.api.mvc.Controller
+import play.api.mvc.{Action, Controller}
 import scalikejdbc._
+import tool.BattleScore
 
-/**
- * Date: 14/06/12.
- */
-object RestUser extends Controller {
+import scala.concurrent.duration._
+import scala.collection.breakOut
+import scala.concurrent.ExecutionContext
+
+class RestUser @Inject()(implicit val ec: ExecutionContext) extends Controller {
   import controllers.Common._
+
+  def show(memberId: Long) = Action {
+    db.Admiral.find(memberId).fold(NotFound("Not found admiral.")) { admiral => Ok(write(admiral)) }
+  }
 
   def materials(userId: Long) = returnJson(db.Material.findAllByUser(userId))
 
   def basics(userId: Long) = returnJson(db.Basic.findAllByUser(userId))
 
   def scores(memberId: Long) = returnJson(db.Ranking.findAllBy(sqls.eq(db.Ranking.r.memberId, memberId)))
+
+  def calcScores(memberId: Long) = {
+    val fromDb = db.CalcScore.findAllBy(sqls.eq(db.CalcScore.cs.memberId, memberId)).sortBy(_.yyyymmddhh).map(_.withSum)
+    val now = BattleScore.calcFromMemberId(memberId).toCalcScore(memberId, 0, System.currentTimeMillis()).withSum
+    returnJson(fromDb ++ List(now))
+  }
+
+  def deletePass(memberId: Long) = authPonkotu { _ =>
+    db.MyFleetAuth.find(memberId).fold(NotFound("Not found admiral.")) { auth =>
+      auth.destroy()
+      Ok("Success")
+    }
+  }
+
+  def shipExp(memberId: Long, shipId: Int) = returnJson {
+    val sh = db.ShipHistory.sh
+    db.ShipHistory.findAllBy(sqls.eq(sh.memberId, memberId).and.eq(sh.shipId, shipId))
+  }
 
   def ndocks(memberId: Long) = returnJson(db.NDock.findAllByUserWithName(memberId))
 
@@ -74,13 +104,20 @@ object RestUser extends Controller {
     else db.BattleResult.countBy(where)
   }
 
-  private def battleResultWhere(memberId: Long, boss: Boolean, drop: Boolean, rank: String, area: Option[Int], info: Option[Int]) =
-    sqls"member_id = ${memberId}"
-      .append(if(rank.nonEmpty) sqls" and win_rank in (${rank.map(_.toString)})" else sqls"")
-      .append(if(boss) sqls" and boss = true" else sqls"")
-      .append(if(drop) sqls" and get_ship_id is not null" else sqls"")
-      .append(area.map(a => sqls" and br.area_id = ${a}").getOrElse(sqls""))
-      .append(info.map(i => sqls" and br.info_no = ${i}").getOrElse(sqls""))
+  private def battleResultWhere(memberId: Long, boss: Boolean, drop: Boolean, rank: String, area: Option[Int], info: Option[Int]) = {
+    val br = db.BattleResult.br
+    val ci = db.BattleResult.ci
+    val seq: Seq[Option[SQLSyntax]] = Seq(
+      if(rank.nonEmpty) Some(sqls.in(br.winRank, rank.map(_.toString))) else None,
+      if(boss) Some(sqls.eq(ci.boss, true)) else None,
+      if(drop) Some(sqls.isNotNull(br.getShipId)) else None,
+      area.map { a => sqls.eq(br.areaId, a) },
+      info.map { i => sqls.eq(br.infoNo, i) }
+    )
+    sqls.eq(br.memberId, memberId)
+        .and.gt(sqls"br.created", System.currentTimeMillis() - 180.days.toMillis) // 範囲を絞って高速化
+        .and.append(sqls.toAndConditionOpt(seq:_*).getOrElse(sqls"true"))
+  }
 
   def routeLog(memberId: Long, limit: Int, offset: Int, area: Int, info: Int) = returnJson {
     require(limit + offset <= 210, "limit + offset <= 210")
@@ -128,7 +165,9 @@ object RestUser extends Controller {
     sqls"mh.member_id = ${memberId}"
       .append(missionId.map(id => sqls" and mh.number = ${id}").getOrElse(sqls""))
 
-  def quest(memberId: Long) = returnJson { db.Quest.findAllBy(sqls"member_id = ${memberId}") }
+  def quest(memberId: Long) = returnJson {
+    db.Quest.findAllBy(sqls"member_id = ${memberId}").sortBy { q => (q.state, q.id) }
+  }
 
   def snap(memberId: Long, snapId: Long) = returnJson {
     db.DeckSnapshot.find(snapId).filter(_.memberId == memberId).get
@@ -140,5 +179,34 @@ object RestUser extends Controller {
 
   def honors(memberId: Long, set: Boolean) = returnJson {
     Honors.fromUser(memberId, set)
+  }
+
+  def shipGroupExp(memberId: Long, groupId: Int, aggId: Int, period: Long = 30.days.toMillis) = returnJson {
+    val result = for {
+      group <- ShipExpGroup.find(groupId)
+      agg <- ShipExpAggPattern.find(aggId)
+    } yield {
+      val ships = group.ships(memberId, period)
+      val sh = db.ShipHistory.sh
+      val from = System.currentTimeMillis() - period
+      val histories = db.ShipHistory.findAllBy(sqls.eq(sh.memberId, memberId).and.in(sh.shipId, ships).and.ge(sh.created, from))
+      val names: Map[Int, ShipWithName] = db.Ship.findIn(memberId, ships).map { s => s.id -> s }(breakOut)
+      ships.map { shipId =>
+        shipId -> histories.filter(_.shipId == shipId)
+      }.filter(_._2.size > 2).flatMap { case (shipId, xs) =>
+        names.get(shipId).map { ship =>
+          val min = xs.map(_.exp).min
+          val data = xs.map { x =>
+            val exp = agg match {
+              case ShipExpAggPattern.RawValue => x.exp
+              case ShipExpAggPattern.Diff => x.exp - min
+            }
+            Exp(exp, x.created)
+          }
+          ShipExps(shipId, s"${ship.stAbbName} ${ship.name}", data)
+        }
+      }
+    }
+    result.getOrElse(Nil)
   }
 }

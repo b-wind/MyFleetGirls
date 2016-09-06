@@ -1,12 +1,12 @@
 package models.join
 
 import models.db._
-import tool.{EquipType, ShipExperience}
+import tool.{AntiAirCutin, ShipExperience}
 
 /**
  * Date: 14/06/16.
  */
-trait ShipParameter extends GraphData {
+trait ShipParameter extends GraphData with AntiAirCutin {
   import models.join.ShipParameter._
 
   def ship: Ship
@@ -40,20 +40,11 @@ trait ShipParameter extends GraphData {
   def stName = stype.name
   def stAbbName = stAbbNames(stName)
 
-  lazy val slot: Seq[SlotItemWithMaster] = SlotItem.findIn(ship.slot, memberId)
-  lazy val slotMaster: Seq[MasterSlotItem] = {
-    val ids = slot.map(_.slotitemId)
-    val map = MasterSlotItem.findIn(ids).map(it => it.id -> it).toMap
-    ids.flatMap(map.get)
-  }
+  def isDamaged = nowhp <= (maxhp / 2)
+  def damage: Option[Damage] = Damage.fromHp(nowhp, maxhp)
 
-  lazy val airSuperiority: Int = {
-    slotMaster.zip(spec.maxeq).filter(_._1.category.exists(EquipType.CarrierBased.contains)).map { case (fighter, slotCount) =>
-      Math.floor(fighter.antiair * math.sqrt(slotCount)).toInt
-    }.sum
-  }
-
-  def slotNames: Seq[String] = slot.map(_.nameWithLevel)
+  def slotMaster: Seq[MasterSlotItem]
+  def slotNames: Seq[String]
 
   def hpRate: Double = nowhp / maxhp.toDouble
 
@@ -82,7 +73,7 @@ trait ShipParameter extends GraphData {
   def expRate: Double = (exp - ShipExperience.sum(lv)).toDouble/ShipExperience.diff(lv + 1)
   /** LvMAX(100 or 150)までに必要な経験値の取得率 */
   def entireExpRate: Double =
-    if(lv > 99) exp.toDouble/ShipExperience.sum(150) else exp.toDouble/ShipExperience.sum(100)
+    if(lv > 99) exp.toDouble/ShipExperience.sum(155) else exp.toDouble/ShipExperience.sum(100)
 }
 
 object ShipParameter {
@@ -122,4 +113,18 @@ object ShipParameter {
     if(rate > 0.5) Yellow.blend(Blue, (rate - 0.5) * 2.0)
     else Red.blend(Yellow, rate * 2.0)
   }
+}
+
+sealed abstract class Damage(val name: String)
+
+object Damage {
+  case object Minor extends Damage("minor")
+  case object Half extends Damage("half")
+  case object Major extends Damage("major")
+
+  def fromHp(now: Int, max: Int): Option[Damage] =
+    if(now <= max / 4) Some(Major)
+    else if(now <= max / 2) Some(Half)
+    else if(now <= max * 3 / 4) Some(Minor)
+    else None
 }

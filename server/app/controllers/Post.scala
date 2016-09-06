@@ -1,5 +1,7 @@
 package controllers
 
+import javax.inject.Inject
+
 import com.ponkotuy.data._
 import com.ponkotuy.data.master.MasterRemodel
 import com.ponkotuy.value.KCServer
@@ -8,12 +10,14 @@ import models.db
 import play.api.mvc._
 import scalikejdbc.{AutoSession, DBSession}
 
+import scala.concurrent.ExecutionContext
+
 /**
  *
  * @author ponkotuy
  * Date: 14/02/21.
  */
-object Post extends Controller {
+class Post @Inject()(implicit val ec: ExecutionContext) extends Controller {
   def basic = authAndParse[Basic] { case (auth, basic) =>
     val isChange = !db.Basic.findByUser(auth.id).exists(_.diff(basic) < 0.01)
     if(isChange) {
@@ -42,11 +46,13 @@ object Post extends Controller {
   def ship2 = authAndParse[List[Ship]] { case (auth, ships) =>
     db.Ship.deleteAllByUser(auth.id)
     db.Ship.bulkInsert(ships, auth.id)
+    db.ShipHistory.bulkInsert(ships, auth.id)
     Res.success
   }
 
   def updateShip() = authAndParse[List[Ship]] { case (auth, ships) =>
     db.Ship.bulkUpsert(ships, auth.id)
+    db.ShipHistory.bulkInsert(ships, auth.id)
     Res.success
   }
 
@@ -119,6 +125,10 @@ object Post extends Controller {
     Res.success
   }
 
+  def eventMapRank = authAndParse[EventMapRank] { case (auth, rank) =>
+    if(db.MapInfo.updateRank(rank, auth.id)) Res.success else NotFound(s"Not found map_info.")
+  }
+
   def slotItem = authAndParse[List[SlotItem]] { case (auth, items) =>
     db.SlotItem.deleteAllByUser(auth.id)
     db.SlotItem.bulkInsert(items, auth.id)
@@ -157,7 +167,9 @@ object Post extends Controller {
       afterSlot <- request.afterSlot
       item <- db.SlotItem.find(request.slotId, auth.id)
     } {
-      db.SlotItem(auth.id, item.id, item.slotitemId, item.locked, afterSlot.level).save()
+      db.SlotItem(
+        auth.id, item.id, item.slotitemId, item.locked, afterSlot.level, item.alv, Some(System.currentTimeMillis())
+      ).save()
     }
     Res.success
   }
@@ -167,7 +179,10 @@ object Post extends Controller {
     Res.success
   }
 
-  def ranking() = authAndParse[Ranking] { case (auth, request) =>
+  def ranking = Action { Ok("v1 is deprecated. use latest client.") }
+
+  // rankingと変化は無いが、非対応clientがPOSTすると間違った値になるのでVerup
+  def ranking2() = authAndParse[Ranking] { case (auth, request) =>
     db.Ranking.findNewest(auth.id) match {
       case None => insertRanking(auth, request)
       case Some(before) =>
@@ -176,7 +191,11 @@ object Post extends Controller {
   }
 
   private def insertRanking(auth: db.Admiral, rank: Ranking)(implicit session: DBSession = AutoSession) = {
-    db.Ranking.create(auth.id, rank.no, rank.rate, System.currentTimeMillis())
-    Res.success
+    if(rank.nickname == auth.nickname) {
+      db.Ranking.create(auth.id, rank.no, rank.rate, System.currentTimeMillis())
+      Res.success
+    } else {
+      BadRequest("nickname mismatch")
+    }
   }
 }

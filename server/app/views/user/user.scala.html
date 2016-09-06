@@ -1,4 +1,12 @@
-@(user: User, yomes: List[ShipWithName], best: Option[ShipWithName], flagship: Option[ShipWithName])
+@import models.req.ScoreDays
+@(
+    user: User,
+    yomes: Seq[ShipWithName],
+    best: Option[ShipWithName],
+    flagship: Option[ShipWithName],
+    scores: Seq[ScoreDays]
+)
+
 @import models.join.ShipWithName
 
 @main {
@@ -7,6 +15,7 @@
   <script src="@Js.MomentLocales"></script>
   <script src="@Js.Lodash"></script>
   <script src="@Js.Common"></script>
+  <script src="@Js.Coffee("graph")"></script>
   <script src="@Js.Coffee("user")"></script>
   <style>
     div.chart {
@@ -15,6 +24,9 @@
 
     div.overview {
       height: 200px;
+    }
+    td.strong {
+      font-weight: bold;
     }
   </style>
 } {
@@ -72,7 +84,7 @@
           <tr>
             <td>@ship.stName</td>
             <td>@ship.name</td>
-            <td style="padding:0px;"><div style="background-color:#D9EDF7;width:@{(ship.expRate*100).toInt}%;padding:5px;">@ship.lv</div></td>
+            <td style="padding:0px;"><div style="@if(ship.expRate > 0){background-color:#D9EDF7;}width:@{(ship.expRate*100).toInt}%;padding:5px;">@ship.lv</div></td>
             <td style="padding:0px;"><div style="background-color:@if(ship.lv > 100){#EBCCD1}else{#D9EDF7};width:@{(ship.entireExpRate*100).toInt}%;padding:5px;">@{f"${ship.exp}%,d"}</div></td>
             <td style="padding:0px;"><div style="background-color:@ship.hpRGB.toString;width:@{(ship.hpRate*100).toInt}%;padding:5px;">@ship.nowhp/@ship.maxhp</div></td>
             <td style="padding:0px;"><div style="background-color:@ship.condBarRGB.toString;width:@{ship.cond}%;padding:5px;">@ship.cond</div></td>
@@ -111,6 +123,33 @@
         <div id="admiral_score_graph" class="chart width-adj"></div>
         <div id="admiral_score_overview" class="overview width-adj"></div>
       </div>
+
+      <h3>戦果推定値変動</h3>
+      <table class="table table-condensed">
+        <thead>
+          <tr>
+            <th>日時</th>
+            <th><strong>戦果</strong></th>
+            <th>経験値</th>
+            <th>引継戦果(経験値)</th>
+            <th>EO</th>
+            <th>引継戦果(EO)</th>
+          </tr>
+        </thead>
+        <tbody>
+          @scores.map { x =>
+          <tr>
+            <td>@x.date</td>
+            @x.score.cell("strong")
+            @x.monthlyExp.cell()
+            <td>@x.yearlyExp</td>
+            @x.eo.cell()
+            <td>@x.lastEo</td>
+          </tr>
+          }
+        </tbody>
+      </table>
+      <p>正確な戦果推定値を得るには、長期間に渡り、常時MyFleetGirlsを使っていることが必要です</p>
     }
   }
 }

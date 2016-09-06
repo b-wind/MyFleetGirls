@@ -1,5 +1,7 @@
 package controllers
 
+import javax.inject.Inject
+
 import models.db
 import models.join._
 import models.query.{Period, SnapshotSearch}
@@ -7,15 +9,19 @@ import models.view.{CItem, CShip}
 import org.json4s._
 import org.json4s.native.Serialization.write
 import play.api.mvc._
-import ranking.common.{RankingType, Ranking}
+import ranking.common.{Ranking, RankingType}
 import scalikejdbc._
+import util.{MFGDateUtil, PeriodicalValue, Ymdh}
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 import scala.util.Try
 
 /**
  * Date: 14/06/11.
  */
-object ViewSta extends Controller {
+class ViewSta @Inject()(implicit val ec: ExecutionContext) extends Controller {
+  import ViewSta._
   import controllers.Common._
 
   def activities = actionAsync { Ok(views.html.sta.activities()) }
@@ -68,7 +74,7 @@ object ViewSta extends Controller {
     val sum = counts.map(_._2).sum.toDouble
     val withRate = counts.map { case (item, count) => (item.name, count, count/sum) }
     val countJsonRaw = counts.map { case (item, count) =>
-      val url = routes.ViewSta.fromShip().toString() + s"#query=${item.name}"
+      val url = routes.ViewSta.fromShip().toString + s"#query=${item.name}"
       Map("label" -> item.name, "data" -> count, "url" -> url)
     }
     Ok(views.html.sta.citem(citem, write(countJsonRaw), withRate, citems))
@@ -77,7 +83,7 @@ object ViewSta extends Controller {
   def fromShip() = actionAsync { Ok(views.html.sta.from_ship()) }
 
   def dropStage() = actionAsync {
-    val stages = db.BattleResult.countAllByStage()
+    val stages = countStageCache.apply()
     Ok(views.html.sta.drop_stage(stages))
   }
 
@@ -111,37 +117,38 @@ object ViewSta extends Controller {
 
   private def fleetCounts(fleets: Seq[Seq[ShipWithName]]): Seq[(Seq[String], Int)] = {
     fleets.map { xs => xs.map(_.stype.name).sorted }
-      .groupBy(identity).mapValues(_.size)
-      .toList.sortBy(_._2).reverse.take(30)
+        .groupBy(identity).mapValues(_.size)
+        .filterKeys(_.nonEmpty)
+        .toList.sortBy(_._2).reverse.take(30)
   }
 
   def ranking() = actionAsync(Redirect(routes.ViewSta.rankingWithType("Admiral")))
 
-  def rankingWithType(typ: String) = actionAsync {
+  def rankingWithType(typ: String, yyyymmddhh: Int) = actionAsync {
+    val ymdh = rankingYmdh(yyyymmddhh)
     RankingType.fromStr(typ).map { ranking =>
-      Ok(views.html.sta.ranking(ranking))
+      Ok(views.html.sta.ranking(ranking, ymdh))
     }.getOrElse(NotFound("Not found page type"))
   }
 
-  def rankingDetails(_ranking: String) = actionAsync {
+  def rankingDetails(_ranking: String, yyyymmddhh: Int) = actionAsync {
+    val ymdh = rankingYmdh(yyyymmddhh)
     Ranking.fromString(_ranking).map { ranking =>
-      Ok(views.html.sta.modal_ranking(ranking))
+      Ok(views.html.sta.modal_ranking(ranking, ymdh))
     }.getOrElse(NotFound("そのようなRankingは見つかりません"))
   }
 
-  val StaBookURL = "/entire/sta/book/"
+  private def rankingYmdh(yyyymmddhh: Int)(implicit session: DBSession = AutoSession): Ymdh = {
+    import MFGDateUtil._
+    if(yyyymmddhh < 0) {
+      db.MyfleetRanking.findNewestTime().getOrElse(Ymdh.now(Tokyo))
+    } else Ymdh.fromInt(yyyymmddhh)
+  }
+
   def shipList() = actionAsync {
     val ms = db.MasterShipBase.ms
     val ships = db.MasterShipBase.findAllWithStype(sqls.gt(ms.sortno, 0))
     Ok(views.html.sta.ship_list(ships, favCountTableByShip()))
-  }
-
-  def favCountTableByShip(): Map[Int, Long] = {
-    val f = db.Favorite.f
-    val favs = db.Favorite.countByURL(sqls.eq(f.first, "entire").and.eq(f.second, "sta").and.like(f.url, StaBookURL + "%"))
-    favs.flatMap { case (url, _, count) =>
-      Try { url.replace(StaBookURL, "").toInt }.map(_ -> count).toOption
-    }.toMap.withDefaultValue(0L)
   }
 
   def shipBook(sid: Int) = actionAsync {
@@ -176,6 +183,21 @@ object ViewSta extends Controller {
     val withRates = HonorWithRate.fromWithAdmiral(honors).sortBy(-_.rate)
     Ok(views.html.sta.honor(withRates))
   }
+}
+
+object ViewSta {
+  val StaBookURL = "/entire/sta/book/"
+
+  def favCountTableByShip(): Map[Int, Long] = {
+    val f = db.Favorite.f
+    val favs = db.Favorite.countByURL(sqls.eq(f.first, "entire").and.eq(f.second, "sta").and.like(f.url, StaBookURL + "%"))
+    favs.flatMap { case (url, _, count) =>
+      Try { url.replace(StaBookURL, "").toInt }.map(_ -> count).toOption
+    }.toMap.withDefaultValue(0L)
+  }
 
   private def toP(d: Double): String = f"${d*100}%.1f"
+
+  val countStageCache = new PeriodicalValue(1.hour, () => db.BattleResult.countAllByStage())
+
 }

@@ -16,12 +16,15 @@ abstract class Book {
 object Book {
   implicit val formats = DefaultFormats
   def fromJson(json: JValue): List[Book] = {
-    val JArray(xs) = json \ "api_list"
-    checkType(xs.head.asInstanceOf[JObject]) match {
-      case BookType.Ship =>
-        xs.flatMap(parseShipBook)
-      case BookType.Item =>
-        xs.map(parseItemBook)
+    json \ "api_list" match {
+      case JArray(xs@(head: JObject) :: _) =>
+        checkType(head) match {
+          case BookType.Ship =>
+            xs.flatMap(parseShipBook)
+          case BookType.Item =>
+            xs.map(parseItemBook)
+        }
+      case _ => Nil
     }
   }
 
@@ -30,7 +33,7 @@ object Book {
     val JString(name) = json \ "api_name"
     val JArray(statess) = json \ "api_state"
     val indexNo = (json \ "api_index_no").extract[Int]
-    (0 until statess.size).flatMap { i =>
+    statess.indices.flatMap { i =>
       val states = statess(i)
       val JArray(st) = states
       val exist = st(0).extract[Int] != 0
@@ -58,7 +61,7 @@ object Book {
   }
 
   private def checkType(json: JObject): BookType = {
-    if(json.values.keySet.exists(_ == "api_sinfo")) BookType.Ship
+    if(json.values.keySet.contains("api_sinfo")) BookType.Ship
     else BookType.Item
   }
 }

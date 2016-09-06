@@ -1,9 +1,12 @@
 package controllers
 
+import javax.inject.Inject
+
 import com.github.nscala_time.time.Imports._
 import com.ponkotuy.tool.Checksum
 import models.db
-import models.join.{MasterRemodelJson, ItemMat, ShipDrop, ShipWithFav}
+import models.db.MapRank
+import models.join.{ItemMat, MasterRemodelJson, ShipDrop, ShipWithFav}
 import models.query.Period
 import models.response.DropRate
 import org.json4s.JsonDSL._
@@ -11,17 +14,25 @@ import org.json4s._
 import play.api.mvc.Controller
 import scalikejdbc._
 
-import scala.collection.mutable
+import scala.collection.{breakOut, mutable}
+import scala.concurrent.ExecutionContext
 
 /**
  *
  * @author ponkotuy
  * Date: 14/02/23
  */
-object Rest extends Controller {
+class Rest @Inject()(implicit val ec: ExecutionContext) extends Controller {
   import controllers.Common._
 
-  def searchUser(q: String) = returnJson(db.Admiral.findAllByLike(s"%$q%", limit = 20))
+  def searchUser(q: String) = {
+    if(q.isEmpty) {
+      val b = db.Admiral.b
+      returnJson(db.Admiral.findAllRandomWithLv(limit = 20))
+    } else {
+      returnJson(db.Admiral.findAllByLike(s"%$q%", limit = 20))
+    }
+  }
 
   def searchBaseUser(serverId: Int) = returnJson(db.Admiral.findAllByServer(serverId, limit = 20))
 
@@ -85,16 +96,16 @@ object Rest extends Controller {
     }
   }
 
-  def dropCell(area: Int, info: Int, cell: Int, rank: String, from: String, to: String) = returnJson {
+  def dropCell(area: Int, info: Int, cell: Int, rank: String, from: String, to: String, mapRank: String) = returnJson {
     val fromTo = Period.fromStr(from ,to).where(sqls"br.created")
-    val drops = db.BattleResult.countCellsGroupByDrop(area, info, cell, rank, fromTo)
+    val drops = db.BattleResult.countCellsGroupByDrop(area, info, cell, rank, fromTo.and(mapRankWhere(mapRank)))
     val sum = drops.map(_._2).sum.toDouble
     drops.map(dropToJson(sum))
   }
 
-  def dropCellAlpha(area: Int, info: Int, alpha: String, rank: String, from: String, to: String) = returnJson {
+  def dropCellAlpha(area: Int, info: Int, alpha: String, rank: String, from: String, to: String, mapRank: String) = returnJson {
     val fromTo = Period.fromStr(from, to).where(sqls"br.created")
-    val drops = db.BattleResult.countCellsAlphaGroupByDrop(area, info, alpha, rank, fromTo)
+    val drops = db.BattleResult.countCellsAlphaGroupByDrop(area, info, alpha, rank, fromTo.and(mapRankWhere(mapRank)))
     val sum = drops.map(_._2).sum.toDouble
     drops.map(dropToJson(sum))
   }
@@ -105,6 +116,12 @@ object Rest extends Controller {
       ("count" -> count) ~
       ("sum" -> sum) ~
       ("rate" -> f"${count / sum * 100}%.1f%%")
+  }
+
+  private def mapRankWhere(mapRank: String): Option[SQLSyntax] = {
+    val br = db.BattleResult.br
+    val mapRanks = MapRank.fromString(mapRank)
+    if(mapRanks.isEmpty) None else Some(sqls.in(br.mapRank, mapRanks.map(_.v)(breakOut)))
   }
 
   def route(area: Int, info: Int, from: String, to: String) = returnJson {
@@ -120,6 +137,11 @@ object Rest extends Controller {
       .append(if(area != -1) sqls" and area_id = ${area}" else sqls"")
       .append(if(info != -1) sqls" and info_no = ${info}" else sqls"")
     db.CellInfo.findAllBy(where)
+  }
+
+  def cellPosition(area: Int, info: Int) = returnJson {
+    val cp = db.CellPosition.cp
+    db.CellPosition.findAllBy(sqls.eq(cp.areaId, area).and.eq(cp.infoNo, info))
   }
 
   def maps() = returnJson {
@@ -142,10 +164,12 @@ object Rest extends Controller {
   }
 
   def remodelLogSummary(slotId: Int) = returnJson {
-    val aWeekAgo = DateTime.now - 7.weeks
-    val where = sqls"slot_id = ${slotId}".and.append(sqls"created > ${aWeekAgo.getMillis}")
+    import util.MFGDateUtil._
+    val aWeekAgo = DateTime.now(Tokyo) - 1.week
+    val r = db.RemodelSlot.r
+    val where = sqls.eq(r.slotId, slotId).and.gt(r.created, aWeekAgo.getMillis)
     val logs = db.RemodelSlot.findAllWithSecondShipBy(where, 1000)
-    val dates = logs.map(_.remodel.created).map(time => new DateTime(time, DateTimeZone.forID("Asia/Tokyo")))
+    val dates = logs.map(_.remodel.created).map(time => new DateTime(time, Tokyo))
     val dayOfWeekSummary = dates.map(_.getDayOfWeek).sorted.map(_.toString).distinct
     val secondShipCount = logs.map(_.ship).groupBy(_.map(_.name)).mapValues(_.size)
     val secondShipSummary = secondShipCount.toList.sortBy(-_._2).map(_._1)

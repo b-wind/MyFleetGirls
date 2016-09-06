@@ -6,6 +6,8 @@ import org.json4s._
 import org.json4s.JsonDSL._
 import scalikejdbc._
 
+import scala.collection.breakOut
+
 case class MapRoute(
     id: Long,
     memberId: Long,
@@ -109,14 +111,15 @@ object MapRoute extends SQLSyntaxSupport[MapRoute] {
 
   private def findFleet(routes: Seq[MapRoute]): List[Vector[ShipWithName]] = {
     val fleets = routes.map(r => r.memberId -> r.fleet)
-    val userShips = fleets.groupBy(_._1).mapValues(_.map(_._2).flatten)
+    val userShips = fleets.groupBy(_._1).mapValues(_.flatMap(_._2))
     val ships = userShips.flatMap { case (memberId, ids) =>
       val xs = Ship.findIn(memberId, ids)
       xs.map(x => (x.memberId, x.id) -> x)
     }
-    fleets.map { case (memberId, ids) =>
-      ids.flatMap(id => ships.get((memberId, id))).toVector
-    }.toList
+    fleets.flatMap { case (memberId, ids) =>
+      val opts = ids.map(id => ships.get((memberId, id)))
+      if(opts.forall(_.isDefined)) Some(opts.flatten.toVector) else None
+    }(breakOut)
   }
 
   def findStageUnique()(implicit session: DBSession = autoSession): List[Stage] = {
@@ -189,7 +192,7 @@ object MapRoute extends SQLSyntaxSupport[MapRoute] {
         column.infoNo -> entity.infoNo,
         column.dep -> entity.dep,
         column.dest -> entity.dest,
-        column.fleet -> entity.fleet,
+        column.fleet -> entity.fleet.mkString(","),
         column.created -> entity.created
       ).where.eq(column.id, entity.id)
     }.update().apply()

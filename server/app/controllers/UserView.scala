@@ -1,24 +1,29 @@
 package controllers
 
+import javax.inject.Inject
+
 import com.github.nscala_time.time.Imports._
 import honor.Honors
-import models.db.AGOProgress
-import org.json4s.native.Serialization.write
-import play.api.mvc._
-import play.api.libs.concurrent.Execution.Implicits._
-import scalikejdbc._
 import models.db
-import tool.{BestShipExp, HistgramShipLv, MaterialDays, STypeExp}
+import models.db.{AGOProgress, CalcScore, DeckPort, ItemSnapshot}
+import models.join.User
+import models.req.{MaterialDays, ScoreDays}
+import org.json4s.native.Serialization.write
+import play.api.mvc.{Action, Controller}
+import scalikejdbc._
+import tool.{BattleScore, BestShipExp, HistgramShipLv, STypeExp}
+import util.Ymdh
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
  *
  * @author ponkotuy
  * Date: 14/04/01.
  */
-object UserView extends Controller {
+class UserView @Inject()(implicit val ec: ExecutionContext) extends Controller {
   import controllers.Common._
+  import util.MFGDateUtil._
 
   def name(user: String) = Action.async {
     Future {
@@ -44,7 +49,16 @@ object UserView extends Controller {
       .filterNot(b => yomeIds.contains(b.id))
     val flagship = db.DeckShip.findFlagshipByUserWishShipName(memberId)
       .filterNot(f => (yomeIds ++ best.map(_.id)).contains(f.id))
-    Ok(views.html.user.user(user, yomes, best, flagship))
+    val cs = db.CalcScore.cs
+    val scores = db.CalcScore.findAllBy(
+      sqls.eq(cs.memberId, memberId)
+          .and.gt(cs.yyyymmddhh, Ymdh.monthHead(DateTime.now(Tokyo)).toInt)
+    ).sortBy(_.yyyymmddhh)
+    val nowScore = BattleScore.calcFromMemberId(memberId).toCalcScore(memberId, 0, System.currentTimeMillis())
+    val scoreDays = (CalcScore.zero :: scores ++ List(nowScore)).reverseIterator.sliding(2).map { case Seq(now, prev) =>
+      ScoreDays.fromScores(now, prev)
+    }.toList
+    Ok(views.html.user.user(user, yomes, best, flagship, scoreDays))
   }
 
   def favorite(memberId: Long) = userView(memberId) { user =>
@@ -66,13 +80,32 @@ object UserView extends Controller {
   }
 
   def registerSnap(memberId: Long, deckId: Int) = userView(memberId) { user =>
-    val ships = db.DeckShip.findAllByDeck(memberId, deckId)
+    if(!user.isMine) {
+      Redirect(routes.View.login(user.admiral.id.toString, routes.UserView.registerSnap(memberId, deckId).url))
+    } else {
+      if (deckId < 10) registerDefaultSnap(user, deckId) else registerCombinedSnap(user, deckId)
+    }
+  }
+
+  private def registerDefaultSnap(user: User, deckId: Int) = {
+    val memberId = user.admiral.id
     db.DeckPort.find(memberId, deckId) match {
       case Some(deck) =>
-        if(user.isMine) Ok(views.html.user.register_snap(user, ships, deck))
-        else Redirect(routes.View.login(user.admiral.id.toString, routes.UserView.registerSnap(memberId, deckId).url))
+        val ships = db.DeckShip.findAllByDeck(memberId, deckId)
+        Ok(views.html.user.register_snap(user, ships, deck))
       case None => BadRequest(s"Not found deck. memberId = ${memberId}, deckId = ${deckId}")
     }
+  }
+
+  private def registerCombinedSnap(user: User, deckId: Int) = {
+    val memberId = user.admiral.id
+    val decks = Seq(deckId / 10, deckId % 10)
+    val dp = db.DeckPort.dp
+    val deckPorts = db.DeckPort.findAllBy(sqls.eq(dp.memberId, memberId).and.in(dp.id, decks))
+    val ds = db.DeckShip.ds
+    val ships = deckPorts.flatMap { port => db.DeckShip.findAllByDeck(memberId, port.id) }
+    val dummyDeck = DeckPort(deckId, memberId, deckPorts.head.name, deckPorts.head.created)
+    Ok(views.html.user.register_snap(user, ships, dummyDeck))
   }
 
   def deleteSnap(snapId: Long) = actionAsync { request =>
@@ -90,9 +123,9 @@ object UserView extends Controller {
   }
 
   def material(memberId: Long) = userView(memberId) { user =>
-    val day20ago = DateTime.now - 20.days
+    val day20ago = DateTime.now(Tokyo) - 20.days
     val materials = db.Material.findAllByUser(memberId, from = day20ago.getMillis)
-    val days = materials.groupBy(m => (new DateTime(m.created) - 5.hours).toLocalDate)
+    val days = materials.groupBy(m => (new DateTime(m.created, Tokyo) - 5.hours).toLocalDate)
       .mapValues(_.maxBy(_.created))
       .toSeq.sortBy(_._1).reverse
     val materialDays = days.sliding(2).flatMap {
@@ -113,12 +146,9 @@ object UserView extends Controller {
     Ok(views.html.user.ship(user, ships, decks, deckports))
   }
 
-  val UnprocurableItemId = Set(49)
-
   def book(memberId: Long) = userView(memberId) { user =>
     val allShips = db.ShipBook.findAllUnique()
-    val allItems = db.MasterSlotItem.findAllBy(sqls"msi.id <= 500 and msi.id not in (${UnprocurableItemId})")
-      .map { msi => msi.id -> msi.name }
+    val allItems = db.MasterSlotItem.findAllBy(sqls"msi.id <= 500").map { msi => msi.id -> msi.name }
     val sBooks = db.ShipBook.findAllBy(sqls"member_id = ${memberId}").map(it => it.indexNo -> it).toMap
     val iBooks = db.ItemBook.findAllBy(sqls"member_id = ${memberId}").map(it => it.indexNo -> it).toMap
     Ok(views.html.user.book(user, allShips, sBooks, allItems, iBooks))
@@ -146,16 +176,24 @@ object UserView extends Controller {
 
   def snapAship(memberId: Long, shipId: Int) = userView(memberId) { user =>
     db.DeckShipSnapshot.findWithName(shipId) match {
-      case Some(ship) => Ok(views.html.user.modal_ship(ship, user, true))
+      case Some(ship) =>
+        val is = ItemSnapshot.is
+        val items = db.ItemSnapshot.findAllBy(sqls.eq(is.memberId, memberId).and.eq(is.shipSnapshotId, ship.rest.id))
+            .sortBy(_.position)
+        Ok(views.html.user.modal_ship(ship.withItem(items), user, true))
       case _ => NotFound("艦娘が見つかりませんでした")
     }
   }
 
   def fleet(memberId: Long, deckId: Int) = userView(memberId) { user =>
     val fleet = db.DeckShip.findAllByDeck(memberId, deckId)
-    db.DeckPort.find(memberId, deckId) match {
-      case Some(deck) => Ok(views.html.user.modal_fleet(fleet, deck, user))
-      case _ => NotFound("艦隊が見つかりませんでした")
+    if(fleet.isEmpty) {
+      NotFound("所属艦が見つかりませんでした")
+    } else {
+      db.DeckPort.find(memberId, deckId) match {
+        case Some(deck) => Ok(views.html.user.modal_fleet(fleet, deck, user))
+        case _ => NotFound("艦隊が見つかりませんでした")
+      }
     }
   }
 

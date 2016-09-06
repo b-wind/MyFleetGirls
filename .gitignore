@@ -25,19 +25,23 @@ server/public/client/MyFleetGirls*
 server/public/client/application.conf.sample
 server/public/client/myfleetgirls.keystore
 server/public/client/update.properties
+server/public/client/README.txt
+server/public/client/update.jar
+server/public/zip/MyFleetGirls.zip.old
 newrelic.yml
 newrelic/
 
 # Settings
-application.conf
+/application.conf
+local.conf
 /myfleetgirls.keystore
-server/conf/application.conf
 project/scalikejdbc.properties
 
 # Others
 *~
 *.hprof.txt
 server/public/*.png
+server/lib/*.jar
 logs
 message
 

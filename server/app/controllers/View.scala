@@ -1,19 +1,19 @@
 package controllers
 
-import build.BuildInfo
-import play.api.mvc._
-import models.db
+import javax.inject.Inject
 
-import scala.concurrent.ExecutionContext.Implicits._
-import scala.concurrent.Future
-import scala.io.Source
+import build.BuildInfo
+import models.db
+import play.api.mvc._
+
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
  *
  * @author ponkotuy
  * Date 14/02/24
  */
-object View extends Controller {
+class View @Inject()(implicit val ec: ExecutionContext) extends Controller {
   import Common._
 
   def index = Action.async {
@@ -34,4 +34,9 @@ object View extends Controller {
       Ok(views.html.login(init, back, baseCounts))
     }
   }
+
+  def modalMap(areaId: Int, infoNo: Int, cell: Int) = actionAsync(Ok(views.html.modal_map(areaId, infoNo, cell)))
+  def modalMapLine(areaId: Int, infoNo: Int, dep: Int, dest: Int) = actionAsync(Ok(views.html.modal_map_line(areaId, infoNo, dep, dest)))
+
+  def admin() = authPonkotu(_ => Ok(views.html.admin.index()))
 }

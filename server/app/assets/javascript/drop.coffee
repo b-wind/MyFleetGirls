@@ -1,14 +1,34 @@
+
 $(document).ready ->
+  area = $('#stage').attr('data-area')
+  info = $('#stage').attr('data-info')
+  seaMap = new SeaMap('map_image')
   $('.panel').each ->
     elem = $(this)
     id = elem.attr('id')
     cell = elem.attr('data-cell')
-    vue = new Vue(vueConf(elem, id, cell))
+    new Vue(vueConf(elem, id, cell))
+  $('.panel-heading').each ->
+    elem = $(this)
+    cell = elem.attr('data-cell')
+    elem.hover setPoint(seaMap, cell), () -> seaMap.clear()
   obj = fromURLParameter(location.hash.replace(/^\#/, ''))
-  $("#collapse#{obj.cell}").collapse()
+  $('.collapse').on 'show.bs.collapse', ->
+    cell = $(@).parent().attr('data-cell').split('-', 3)[2]
+    seaMap.setPoint(cell, true)
   $('.collapse').on 'hide.bs.collapse', ->
     here = location.href.replace(/\#.*$/, '') # hash以下を削除
     history.replaceState(null, null, here)
+  seaMap.onload = ->
+    $("#collapse#{obj.cell}").collapse()
+  seaMap.onclick = (alpha) ->
+    $('.collapse').each ->
+      $(this).collapse('hide')
+    $("#collapse#{area}-#{info}-#{alpha}").collapse('show')
+
+setPoint = (seaMap, cell) ->
+  () ->
+    seaMap.setPoint(cell, false)
 
 timeout = 0
 
@@ -21,6 +41,10 @@ vueConf = (elem, id, cell) ->
     rank_s: true
     rank_a: true
     rank_b: true
+    map_rank_all: true
+    map_rank_ko: true
+    map_rank_otsu: true
+    map_rank_hei: true
     url: ''
     period: false
     from: moment({year: 2014, month: 0, day: 1}).format('YYYY-MM-DD')
@@ -31,9 +55,16 @@ vueConf = (elem, id, cell) ->
       (if @rank_s then 'S' else '') +
         (if @rank_a then 'A' else '') +
         (if @rank_b then 'B' else '')
+    mapRank: ->
+      if @map_rank_all then ''
+      else
+        (if @map_rank_ko then 'ko' else '') +
+          (if @map_rank_otsu then 'otsu' else '') +
+          (if @map_rank_hei then 'hei' else '')
     getJSON: ->
       @setHash()
       url = decodeURIComponent(@url.replace('(rank)', @rank()))
+      url = url.replace('(mapRank)', @mapRank())
       if @period
         url = url.replace('(from)', @from)
         url = url.replace('(to)', @to)
@@ -87,6 +118,7 @@ vueConf = (elem, id, cell) ->
       url = base + if @period then "&from=#{@from}&to=#{@to}" else ''
       location.href = url
 
+
   created: ->
     i = this
     elem.find('.panel-collapse').on 'show.bs.collapse', ->
@@ -102,10 +134,13 @@ vueConf = (elem, id, cell) ->
     rank_s: -> @getJSON()
     rank_a: -> @getJSON()
     rank_b: -> @getJSON()
+    map_rank_all: -> @getJSON()
+    map_rank_ko: -> @getJSON()
+    map_rank_otsu: -> @getJSON()
+    map_rank_hei: -> @getJSON()
     drops: (drops) ->
-      if drops.length > 0
-        $("#panel#{cell}")[0].scrollIntoView(true)
-        @draw()
+      $("#panel#{cell}")[0].scrollIntoView(true)
+      @draw()
     period: -> @getJSON()
     from: ->
       if @period

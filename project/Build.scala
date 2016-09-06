@@ -1,138 +1,110 @@
-import scala.sys.{process => p}
-import sbt._
-import Keys._
-import sbtassembly.Plugin._
-import AssemblyKeys._
-import sbtbuildinfo.Plugin._
-import play._
+import com.typesafe.sbt.packager.Keys._
 import com.typesafe.sbt.web.SbtWeb
+import sbt.Keys._
+import sbt._
+import play._
+import sbtassembly.AssemblyPlugin.autoImport._
+import sbtbuildinfo.BuildInfoPlugin
+import scalikejdbc.mapper.SbtKeys._
 
 object MyFleetGirlsBuild extends Build {
 
-  val ver = "1.3.15"
+  val ver = "1.5.9"
 
-  val scalaVer = "2.11.6"
+  val scalaVer = "2.11.8"
 
   lazy val root = Project(id = "my-fleet-girls", base = file("."), settings = rootSettings)
-    .settings(net.virtualvoid.sbt.graph.Plugin.graphSettings: _*)
     .aggregate(server, client, library)
 
-  lazy val rootSettings = Defaults.defaultSettings ++ settings ++ Seq(
-    commands ++= Seq(proxy, assembl, run, stage, start, dist, zip, genMapper, prof, runTester, runTester2)
+  val proxy = inputKey[Unit]("run proxy")
+  val prof = inputKey[Unit]("run profiler")
+  val runTester = inputKey[Unit]("run tester")
+  val runTesterEarth = taskKey[Unit]("run tester")
+  val downLib = taskKey[File]("download library")
+
+  lazy val rootSettings = settings ++ disableAggregates ++ Seq(
+    commands ++= Seq(start),
+    proxy <<= run in (client, Compile),
+    assembly := {
+      (assembly in update).value
+      (assembly in client).value
+    },
+    run <<= run in (server, Compile),
+    stage <<= stage in server,
+    dist <<= dist in server,
+    scalikejdbcGen <<= scalikejdbcGen in (server, Compile),
+    prof <<= run in (profiler, Compile),
+    runTester <<= run in (tester, Compile),
+    runTesterEarth <<= runTester.toTask(" https://myfleet.moe")
   )
 
-  lazy val server = Project(id = "server", base = file("server"))
-    .settings(net.virtualvoid.sbt.graph.Plugin.graphSettings: _*)
+  lazy val disableAggregates = Seq(
+    assembly, stage, dist, scalikejdbcGen
+  ).map {
+    aggregate in _ := false
+  }
+
+  lazy val server = project
     .dependsOn(library)
-    .enablePlugins(PlayScala).settings(
-      scalaVersion := scalaVer
+    .enablePlugins(sbt.PlayScala)
+    .settings(
+      scalaVersion := scalaVer,
+      downLib <<= downLibTask,
+      unmanagedJars in Compile <<= (unmanagedJars in Compile).dependsOn(downLib)
     )
-    .enablePlugins(SbtWeb)
+    .enablePlugins(SbtWeb, BuildInfoPlugin)
 
-  lazy val client = Project(id = "client", base = file("client"))
-    .settings(net.virtualvoid.sbt.graph.Plugin.graphSettings: _*)
+  lazy val client = project
     .settings(scalaVersion := scalaVer)
     .dependsOn(library)
+    .enablePlugins(BuildInfoPlugin)
 
-  lazy val library = Project(id = "library", base = file("library"))
-    .settings(net.virtualvoid.sbt.graph.Plugin.graphSettings: _*)
+  lazy val library = project
     .settings(scalaVersion := scalaVer)
 
-  lazy val update = Project(id = "update", base = file("update"))
-    .settings(net.virtualvoid.sbt.graph.Plugin.graphSettings: _*)
-    .settings(jarName in assembly := "update.jar")
+  lazy val update = project
+    .settings(assemblyJarName in assembly := "update.jar")
 
-  lazy val profiler = Project(id = "profiler", base = file("profiler"))
-    .settings(net.virtualvoid.sbt.graph.Plugin.graphSettings: _*)
+  lazy val profiler = project
+    .settings(scalaVersion := scalaVer)
     .dependsOn(server)
 
-  lazy val tester = Project(id = "tester", base = file("tester"))
+  lazy val tester = project
+    .settings(scalaVersion := scalaVer)
 
   override lazy val settings = super.settings ++ Seq(
     version := ver,
     scalaVersion := scalaVer,
-    scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-language:implicitConversions"),
+    scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-language:implicitConversions", "-encoding", "UTF-8"),
+    javacOptions ++= Seq("-encoding", "UTF-8"),
     updateOptions := updateOptions.value.withCircularDependencyLevel(CircularDependencyLevel.Error),
     updateOptions := updateOptions.value.withCachedResolution(true),
-    jarName in assembly := "MyFleetGirls.jar",
-    incOptions := incOptions.value.withNameHashing(true)
+    assemblyJarName in assembly := "MyFleetGirls.jar",
+    incOptions := incOptions.value.withNameHashing(true),
+    licenses := Seq("MIT License" -> url("http://www.opensource.org/licenses/mit-license.html")),
+    homepage := Some(url("https://myfleet.moe")),
+    fork in Test := true
   )
-
-  def proxy = Command.command("proxy") { state =>
-    val subState = Command.process("project client", state)
-    Command.process("run", subState)
-    state
-  }
-
-  def assembl = Command.command("assembly") { state =>
-    val updateState = Command.process("project update", state)
-    Command.process("assembly", updateState)
-    val clientState = Command.process("project client", state)
-    Command.process("assembly", clientState)
-    state
-  }
-
-  def run = Command.command("run") { state =>
-    val subState = Command.process("project server", state)
-    Command.process("run", subState)
-    state
-  }
-
-  def stage = Command.command("stage") { state =>
-    val subState = Command.process("project server", state)
-    Command.process("stage", subState)
-    state
-  }
 
   def start = Command.command("start") { state =>
     val subState = Command.process("project server", state)
-    Command.process("start", subState)
+    Command.process("testProd", subState)
     state
   }
 
-  def dist = Command.command("dist") { state =>
-    val subState = Command.process("project server", state)
-    Command.process("dist", subState)
-    state
-  }
-
-  def genMapper = Command.args("scalikejdbc-gen", "<arg>") { (state, args) =>
-    val subState = Command.process("project server", state)
-    Command.process("scalikejdbc-gen " + args.mkString(" "), subState)
-    state
-  }
-
-  def zip = Command.command("zip") { state =>
-    def hash(file: String): Option[String] = {
-      (p.Process(s"md5sum ${file}").!!).split(' ').headOption
+  def downLibTask = Def.task {
+    val s = streams.value
+    val libName = "ffdec_5.3.0_lib.jar"
+    val libFile = unmanagedBase.value / libName
+    if (!libFile.exists()) {
+      IO.withTemporaryFile("ffdec-", ".tmp") { tmp =>
+        val dlUrl = url(s"https://www.free-decompiler.com/flash/download/$libName")
+        s.log.info(s"downloading $dlUrl ...")
+        IO.download(dlUrl, tmp)
+        IO.move(tmp, libFile)
+      }
     }
-    Command.process("assembly", state)
-    p.Process("""rm server/public/zip/MyFleetGirls.zip""").run()
-    p.Process("""rm server/public/client/MyFleetGirls.jar.pack.gz""").run()
-    p.Process("""zip -j server/public/zip/MyFleetGirls.zip update/target/update.jar LICENSE update/update.properties update/myfleetgirls.keystore package/resources/application.conf.sample package/resources/MyFleetGirls.bat package/resources/MyFleetGirls.sh package/resources/MyFleetGirls.command package/resources/IE_PROXY.REG""").run()
-    if(hash("server/public/client/MyFleetGirls.jar") != hash("client/target/scala-2.11/MyFleetGirls.jar"))
-      p.Process("""cp client/target/scala-2.11/MyFleetGirls.jar server/public/client/""").run()
-    p.Process("""cp LICENSE MyFleetGirls.bat MyFleetGirls.sh MyFleetGirls.command update/update.properties update/myfleetgirls.keystore package/resources/application.conf.sample package/resources/IE_PROXY.REG server/public/client/""").run()
-    p.Process(Seq("sh", "-c", "pack200 --unknown-attribute=pass server/public/client/MyFleetGirls.jar.pack.gz server/public/client/MyFleetGirls.jar 2> /dev/null")).run()
-    Thread.sleep(20000L)
-    state
+    libFile
   }
 
-  def prof = Command.command("prof") { state =>
-    val subState = Command.process("project  profiler", state)
-    Command.process("run", subState)
-    state
-  }
-
-  def runTester2 = Command.command("runTester") { state =>
-    val subState = Command.process("project tester", state)
-    Command.process(s"run", subState)
-    state
-  }
-
-  def runTester = Command.command("runTesterEarth") { state =>
-    val subState = Command.process("project tester", state)
-    Command.process(s"run https://myfleet.moe", subState)
-    state
-  }
 }

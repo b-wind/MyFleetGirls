@@ -8,7 +8,7 @@ case class KCServer(number: Int, ip: String, name: String)
 object KCServer {
   val values = List(
     KCServer(1, "203.104.209.71", "横須賀鎮守府"),
-    KCServer(2, "125.6.184.15", "呉鎮守府"),
+    KCServer(2, "203.104.209.87", "呉鎮守府"),
     KCServer(3, "125.6.184.16", "佐世保鎮守府"),
     KCServer(4, "125.6.187.205", "舞鶴鎮守府"),
     KCServer(5, "125.6.187.229", "大湊警備府"),
@@ -25,7 +25,8 @@ object KCServer {
     KCServer(16, "125.6.189.247", "宿毛湾泊地"),
     KCServer(17, "203.104.209.23", "鹿屋基地"),
     KCServer(18, "203.104.209.39", "岩川基地"),
-    KCServer(19, "203.104.209.55", "佐伯湾泊地")
+    KCServer(19, "203.104.209.55", "佐伯湾泊地"),
+    KCServer(20, "203.104.209.102", "柱島泊地")
   )
 
   lazy val ips = values.map(_.ip).toSet
