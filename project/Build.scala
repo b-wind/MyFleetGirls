@@ -65,7 +65,7 @@ object MyFleetGirlsBuild extends Build {
 
   lazy val library = project
     .settings(
-      logLevel in test := Level.Debug
+      logLevel in test := Level.Debug,
       scalaVersion := scalaVer
      )
 
