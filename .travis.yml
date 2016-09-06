@@ -19,7 +19,7 @@ jdk:
   - oraclejdk8
 
 script:
-  - sbt ++$TRAVIS_SCALA_VERSION test
+  - sbt --debug ++$TRAVIS_SCALA_VERSION server/test | mail qmur@bst-72.com
 
 notifications:
   webhooks:
