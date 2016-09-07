@@ -20,7 +20,7 @@ jdk:
 
 script:
   - sbt ++$TRAVIS_SCALA_VERSION compile
-  - sbt ++$TRAVIS_SCALA_VERSION -J-Xms512M -J-Xmx2048M test
+  - sbt ++$TRAVIS_SCALA_VERSION -jvm-opts travis/jvmopts.test test
 
 notifications:
   webhooks:
