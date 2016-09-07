@@ -50,6 +50,7 @@ object MyFleetGirlsBuild extends Build {
     .settings(
       scalaVersion := scalaVer,
       logLevel in test := Level.Debug,
+      logBuffered := false,
       downLib <<= downLibTask,
       unmanagedJars in Compile <<= (unmanagedJars in Compile).dependsOn(downLib)
     )
