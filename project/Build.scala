@@ -91,6 +91,7 @@ object MyFleetGirlsBuild extends Build {
     incOptions := incOptions.value.withNameHashing(true),
     licenses := Seq("MIT License" -> url("http://www.opensource.org/licenses/mit-license.html")),
     homepage := Some(url("https://myfleet.moe")),
+    parallelExecution in Test := false,
     fork in Test := true
   )
 
