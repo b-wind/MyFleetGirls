@@ -11,6 +11,7 @@ import org.littleshoot.proxy.{ChainedProxy, ChainedProxyAdapter, ChainedProxyMan
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
 class LittleProxy(host: Option[String], port: Int, upstreamProxy: Option[HttpHost], filtersSource: HttpFiltersSource) {
@@ -32,7 +33,7 @@ class LittleProxy(host: Option[String], port: Int, upstreamProxy: Option[HttpHos
   private[this] val bootstrap = DefaultHttpProxyServer.bootstrap()
     .withName("MyFleetGirlsProxy")
     .withAddress(inetSocketAddress)
-    .withConnectTimeout(30000)
+    .withConnectTimeout(10000) // 10,000 millisecond.
     .withUpstreamProxy(upstreamProxy)
     .withFiltersSource(filtersSource)
     .withThreadPoolConfiguration(defaultThreadPoolConf)
